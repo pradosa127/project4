@@ -1,7 +1,8 @@
-defmodule Project41 do
-  
-  defmodule Main do
+defmodule Main do
     IO.puts "hello"
-  end
-  
+end
+
+
+defmodule Client do
+    use GenServer
 end
