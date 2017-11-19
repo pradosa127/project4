@@ -18,10 +18,12 @@ defmodule Main do
 
 
         # Start server
-
+        # Server.start_link()
+        Test2.zipf(nUsers)
+        # Test.start_link()
         
         # start nUser number of client processes
-        # client_pids=Enum.map(1..nUsers, fn (_) -> Client.start_link("userid",:queue.new,nUsers,0,0,0) end)
+        # client_pids=Enum.map(1..100000, fn (_) -> Client.start_link("userid",:queue.new,nUsers,0,0,0) end)
         # IO.puts "#{inspect client_pids}"
 
         # after the clients are created use this to start sending repeated tweets
@@ -49,6 +51,11 @@ defmodule Server do
     GenServer.start_link(__MODULE__,[], name: :genMain ) 
   end
 
+ 
+ def handle_cast({:tweet,tweetMsg},[])do
+    # IO.puts "hi"
+    {:noreply,[]}
+ end
   #Server need to have handle_cast with {:tweet,tweetMsg} for the tweet opration
   #This will be called from client while sending tweet and retweet
   
@@ -56,7 +63,13 @@ end
 
 defmodule Client do
   use GenServer
-  
+    def init(state) do
+        schedule()
+        {:ok, state}
+    end
+    def schedule()do
+        Process.send_after(self(), :sendtweet1, 20)
+    end
     @doc """
     Client Process is started using Start_Link
     """
@@ -79,7 +92,12 @@ defmodule Client do
         {:noreply, [userid,msgQueue,nUsers,retweetCount,followerMapSize,displayInterval]}
     end
 
-
+    def handle_info(:sendtweet1, state) do
+        schedule()
+        tweetMsg=tweetMsgGenerator(5)
+        GenServer.cast :genMain,{:tweet,tweetMsg}
+        {:noreply, state}
+    end
 
 
     @doc """
