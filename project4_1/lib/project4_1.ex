@@ -198,8 +198,8 @@ defmodule Main do
         
         # start nUser number of client processes
         createNodes(nUsers, 0)
-        #Enum.map(1..nUsers,  fn (_) -> Client.start_link("userId", :queue.new, nUsers, 0, 0, 0) end)
-
+        #Enum.map(1..nUsers,  fn (_) -> Client.start_link("userid", :queue.new, nUsers, 0, 0, 0) end)
+       
         userPIDs = GenServer.call :genMain, :getActorsList
         #zipf - write function inside server, call updateFollowers
         followersMap = GenServer.call :genMain, :getFollowers
@@ -230,10 +230,8 @@ defmodule Main do
         createNodes(nUsers, i+1)
       end
     end
-   
-end
 
-
+  
 
 defmodule Client do
   use GenServer
@@ -258,6 +256,14 @@ defmodule Client do
     def handle_call(:getDisplayInterval, _from, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do
       {:reply, displayInterval, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
     end
+
+    def handle_info(:sendtweet1, state) do
+        schedule()
+        tweetMsg=tweetMsgGenerator(5)
+        GenServer.cast :genMain,{:tweet,tweetMsg}
+        {:noreply, state}
+    end
+
 
     @doc """
     Generates random tweets
