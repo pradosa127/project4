@@ -50,7 +50,7 @@ defmodule Test2 do
         # follwerSet=createfollowerlist([],Enum.at(numFollowers,1),nUSers)
         for k<- 0..nUSers-1 do
             follwerSet=createfollowerlist([],Enum.at(numFollowers,k),nUSers)
-            IO.puts "#{inspect follwerSet}"  
+            # IO.puts "#{inspect follwerSet}"  
         end
         
     end
