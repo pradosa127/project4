@@ -230,6 +230,7 @@ defmodule Main do
         createNodes(nUsers, i+1)
       end
     end
+end
 
   
 
@@ -257,12 +258,12 @@ defmodule Client do
       {:reply, displayInterval, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
     end
 
-    def handle_info(:sendtweet1, state) do
-        schedule()
-        tweetMsg=tweetMsgGenerator(5)
-        GenServer.cast :genMain,{:tweet,tweetMsg}
-        {:noreply, state}
-    end
+    # def handle_info(:sendtweet1, state) do
+    #     schedule()
+    #     tweetMsg=tweetMsgGenerator(5)
+    #     GenServer.cast :genMain,{:tweet,tweetMsg}
+    #     {:noreply, state}
+    # end
 
 
     @doc """
