@@ -41,9 +41,37 @@ defmodule Server do
   @doc """
    Update the follower's list 
   """
-# to do -  call inside zipf 
+  def zipf(nUSers) do
+        s=1.47
+        c=1/(Enum.map(1..nUSers, fn(x)->1/x end)
+          |>Enum.map(fn(x)-> :math.pow(x,s) end)
+          |>Enum.sum())
+
+        zipDist=Enum.map(1..nUSers, fn(x)->c/:math.pow(x,s) end )
+        numFollowers= Enum.map(zipDist, fn(x)->round(Float.ceil((x*nUSers))) end ) 
+        # follwerSet=createfollowerlist([],Enum.at(numFollowers,1),nUSers)
+        for k<- 0..nUSers-1 do
+            follwerSet=createfollowerlist([],Enum.at(numFollowers,k),nUSers)
+            # IO.puts "#{inspect follwerSet}"  
+            GenServer.cast :genMain,{:updateFollowersList, follwerSet}
+        end
+        # follwerSet=createfollowerlist([],Enum.at(numFollowers,1),nUSers)
+        # IO.puts "#{inspect follwerSet}"  
+        # GenServer.cast :genMain, {:updateFollowersList, follwerSet}
+        IO.puts "update completed"
+        
+    end
+
+    def createfollowerlist(list,nFollower,nUSers) do
+         if nFollower>0 do
+            list=list++[:rand.uniform(nUSers)]
+            createfollowerlist(list,nFollower-1,nUSers)
+         else
+            list 
+         end    
+    end
   def handle_cast({:updateFollowersList, followers}, [nUsers, followersList, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
-    {:noreply, [nUsers, followersList++followers, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
+    {:noreply, [nUsers, followersList++[followers], actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
   end
 
 # to do
@@ -87,7 +115,7 @@ defmodule Server do
   end
 
   def handle_cast({:retweet, tweet, userId}, [nUsers, followersList, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
-    GenServer.cast {:tweet, tweet, userId}
+    GenServer.cast :genMain, {:tweet, tweet, userId}
     {:noreply, [nUsers, followersList, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
   end
 
@@ -109,7 +137,7 @@ defmodule Server do
 
   #todo  - zipf
   def handle_call(:getFollowers, _from, [nUsers, followersList, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
-    followersList = [[1],[2,3],[3,4,5]]
+    # followersList = [[1],[2,3],[3,4,5]]
     #updateFollowersList
     {:reply, followersList, [nUsers, followersList, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt+1, maxTweetCnt, stTime]}
   end 
@@ -146,13 +174,14 @@ defmodule Main do
         Server.start_link(nUsers, followersList, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime)
         
         # start nUser number of client processes
-        createNodes(nUsers, 0)
+        # createNodes(nUsers, 0)
         #Enum.map(1..nUsers,  fn (_) -> Client.start_link("userid", :queue.new, nUsers, 0, 0, 0) end)
        
-        userPIDs = GenServer.call :genMain, :getActorsList
-        #zipf - write function inside server, call updateFollowers
+        # userPIDs = GenServer.call :genMain, :getActorsList
+        Server.zipf(nUsers)
         followersList = GenServer.call :genMain, :getFollowers
-        callClientHelper(nUsers, 0, followersList, userPIDs)
+        IO.puts "#{inspect followersList}"  
+        # callClientHelper(nUsers, 0, followersList, userPIDs)
         :timer.sleep(30000)
     end
 
@@ -171,7 +200,7 @@ defmodule Main do
       end
     end
 
-  
+end  
 
 defmodule Client do
   use GenServer
@@ -279,5 +308,4 @@ defmodule Client do
     #     GenServer.cast pid, {:sendRepeatedTweets}
     #     {:noreply,  [userid, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval]}
     # end
-
 end
