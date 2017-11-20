@@ -56,28 +56,81 @@ defmodule Server do
     {:noreply, [nUsers, followersMap++followers, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
   end
 
-# to do
-  def handle_cast({:addToSearchMap, tweet}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
-    {:noreply, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
-  end
-# to do
-  def handle_cast({:removeFromSearchMap, tweet}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
-    {:noreply, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
+ @doc """
+  For extracting hashtags and mentions from the tweets and updating the search map
+ """
+  def extractHashTagFromTweets(tweet, searchMap, strArr, i, operation) do
+    if i<length(strArr) do
+      str  = Enum.at(strArr,i)
+      if String.match?(str, ~r/(#).*/) or String.match?(str, ~r/(@).*/) do
+        #IO.puts "HashTag/mention #{str}"
+        if Map.has_key?(searchMap, str) do
+          hashtagSet = Map.get(searchMap, str)
+          #IO.inspect tweetQ
+          if operation == 1 do
+            hashtagSet = if MapSet.size(hashtagSet)<= 100 do
+                MapSet.put(hashtagSet, tweet)
+            end
+          else
+            hashtagSet = MapSet.delete(hashtagSet, tweet)
+          end
+        else
+            hashtagSet = MapSet.new()
+            hashtagSet =  MapSet.put(hashtagSet, tweet)
+        end
+        IO.inspect hashtagSet
+        newSearchMap = Map.put(searchMap, str, hashtagSet)
+        extractHashTagFromTweets(tweet, newSearchMap, strArr, i+1, operation)
+      end
+    else
+      #IO.inspect searchMap
+      searchMap
+    end
   end
 
+
+ @doc """
+  For updating hashtags and mentions in the searchMap
+ """
+  def handle_cast({:updateSearchMap, tweet, operation}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
+    strArr = String.split(tweet, " ")
+    if operation == 1 do
+      newSearchMap = extractHashTagFromTweets(tweet, searchMap, strArr, 0, 1)
+    else
+      newSearchMap = extractHashTagFromTweets(tweet, searchMap, strArr, 0, 0)
+    end
+    {:noreply, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, newSearchMap, totalTweetCnt, maxTweetCnt, stTime]}
+  end
+
+ @doc """
+  For searching tweets with specific hashtags and mentions
+ """
+  def handle_call({:searchHashTag, hashTagOrMention}, _from, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
+    #hashTagOrMention = "#HashTag1"
+    if Map.has_key?(searchMap, hashTagOrMention) do
+      tweetSet = Map.get(searchMap, hashTagOrMention)
+    else
+      tweetSet = MapSet.new()
+    end
+    IO.puts "Result of searching for #{hashTagOrMention}"
+    IO.inspect tweetSet
+    {:reply, tweetSet, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
+  end
+    
   
  @doc """
   When a user  tweets :tweet updates the users's and it's followers tweet queue
  """
   def handle_cast({:tweet, tweet, userId, tweetOrPopulate}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
       IO.puts "User#{userId} tweeting #{tweet}"
-      
+      #:timer.sleep(100)
       if Map.has_key?(tweetsQueueMap, userId) do
         tweetQ = Map.get(tweetsQueueMap, userId)
         #IO.inspect tweetQ
         tweetQ = if :queue.len(tweetQ)> 100 do
             :queue.in(tweet, :queue.drop(tweetQ))
-            #remove from Search Map
+            #remove tweet from Search Map
+            GenServer.cast :genMain, {:updateSearchMap, tweet, 0}
         else
             :queue.in(tweet, tweetQ)
         end
@@ -90,8 +143,11 @@ defmodule Server do
       userPID = Enum.at(actorsList, userId) 
       GenServer.cast userPID, {:receiveTweet, tweet}
 
-      # update follower's tweet queues
+      # update searchMap and follower's tweet queues
       if tweetOrPopulate == "tweet" do
+        #add tweet from Search Map
+        GenServer.cast :genMain, {:updateSearchMap, tweet, 1}
+
         userFollowersList = Map.get(followersMap, userId)
         GenServer.cast :genMain, {:updateFollowersTweetQ, userFollowersList, 0, tweet}
       end
@@ -184,7 +240,6 @@ defmodule Main do
             IO.puts "please provide exactly one argument"
             System.halt(0)
         end    
-
         # Start Server
         followersMap = %{}
         actorsMap = %{}
@@ -351,11 +406,10 @@ defmodule Client do
           if i < n do
             #IO.puts "sendRepeatedTweets #{userId}"
             tweetMsg = tweetMsgGenerator(nUsers)
-            ##IO.puts "sendRepeatedTweets #{tweetMsg}"
             GenServer.cast :genMain, {:tweet, tweetMsg, userId, "tweet"}
-
+            ##IO.puts "sendRepeatedTweets #{tweetMsg}"
             #to do : has to be removed after Process.start_after is fixed
-            #:timer.sleep(3)
+            :timer.sleep(3)
             GenServer.cast self(), {:sendRepeatedTweets, userId, i+1, n}
             #IO.inspect pid
           end
@@ -367,6 +421,8 @@ defmodule Client do
         #IO.puts "beforestate:: #{state}"
         if state == 0 do 
           state = 1
+          #to do : change the location of search
+          GenServer.call :genMain, {:searchHashTag, "#HashTag1"}
           IO.puts "User#{userId} woke up"
         else
           state = 0
