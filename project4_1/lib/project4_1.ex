@@ -212,8 +212,8 @@ defmodule Main do
     def callClientHelper(nUsers, i, followersMap, userPIDs) do
       if i<nUsers do
         pid = Enum.at(userPIDs, i)
-        displayInterval = GenServer.call pid, :getDisplayInterval
-        GenServer.cast pid, {:clientHelper, i, displayInterval}
+        #displayInterval = GenServer.call pid, :getDisplayInterval
+        GenServer.cast pid, {:clientHelper, i}
         #Client.clientHelper(i, displayInterval)
         callClientHelper(nUsers, i+1, followersMap, userPIDs)
       end
@@ -251,65 +251,18 @@ defmodule Client do
       {:reply, userId, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
     end
 
+    #to do : not used anywhere, check if required in the end
     # def handle_call(:getState, _from, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do
     #   IO.puts "#{state}"
     #   {:reply, state, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
     # end
 
-    def handle_call(:getDisplayInterval, _from, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do
-      {:reply, displayInterval, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
-    end
-
-    # def handle_info(:sendtweet1, state) do
-    #     schedule()
-    #     tweetMsg=tweetMsgGenerator(5)
-    #     GenServer.cast :genMain,{:tweet,tweetMsg}
-    #     {:noreply, state}
+    #to do : not used anywhere, check if required in the end
+    # def handle_call(:getDisplayInterval, _from, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do
+    #   {:reply, displayInterval, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
     # end
 
-
-    @doc """
-    Generates random tweets
-    """
-    def tweetMsgGenerator(nUsers) do
-        if(nUsers>10) do
-            #IO.puts "#{:rand.uniform(10)}"
-            Enum.join(["#Hashtag",  :rand.uniform(10), " ", "@user", :rand.uniform(10)])
-        else
-            Enum.join(["#Hashtag",  :rand.uniform(nUsers), " ", "@user", :rand.uniform(nUsers)])
-        end
-    end 
-
-    @doc """
-    Schedules various functionalities of the client such as sending tweet, searching for specific #hashtags and @users and live connection and disconnection
-    """
-    #  def handle_info(:print_fruit, state) do
-    #     schedule()
-    #     print_fruit()
-    #     {:noreply, state}
-    # end
-    # def handle_info(:print_flower, state) do
-    #     schedule()
-    #     print_flower()
-    #     {:noreply, state}
-    # end
-    
-    def handle_cast({:clientHelper, i, displayInterval}, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do
-        #IO.puts "Client helper #{i} #{displayInterval}"
-
-        GenServer.cast self(), {:sendRepeatedTweets, i, 0, :rand.uniform(10)}
-        GenServer.cast self(), :disconnect_connect
-
-        # #causing some timeout problem: has to be corrected
-        # Process.send_after(self(), {:sendRepeatedTweets, i}, displayInterval)
-        # #Process.send_after(self(), :search, 50)
-        # Process.send_after(self(), {:disconnect_connect, displayInterval}, 10*displayInterval)
-        GenServer.cast self(), {:clientHelper, i, displayInterval}
-        {:noreply,  [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
-    end
-    
-    # def clientHelper(i, displayInterval)do
-        
+     # def clientHelper(i, displayInterval)do    
     # end
 
     # def handle_info({:sendRepeatedTweets, userId}, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do
@@ -326,6 +279,64 @@ defmodule Client do
     #   end
     #   {:noreply,  [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
     # end
+
+    @doc """
+    Schedules various functionalities of the client such as sending tweet, searching for specific #hashtags and @users and live connection and disconnection
+    """
+    #  def handle_info(:print_fruit, state) do
+    #     schedule()
+    #     print_fruit()
+    #     {:noreply, state}
+    # end
+    # def handle_info(:print_flower, state) do
+    #     schedule()
+    #     print_flower()
+    #     {:noreply, state}
+    # end
+
+
+
+    #to do - to be called after zipf and update of follower's map size
+    @doc """
+    Updates the display interval such that greater the follower's size lesser the display interval and more the tweets tweeted
+      followersSize >90% => displayInterval = 0 ms
+      followersSize 80-90% => displayInterval = 10 ms
+      followersSize 70-80% => displayInterval = 20 ms and so on
+    """
+    def handle_call(:updateDisplayInterval, _from, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do
+      divf =  round((followerMapSize/nUsers)*100) 
+      rem = Integer.mod(divf,10)
+      divf = divf-rem
+      displayInterval = 90 - divf
+      {:reply, displayInterval, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
+    end
+
+
+    @doc """
+    Generates random tweets
+    """
+    def tweetMsgGenerator(nUsers) do
+        if(nUsers>10) do
+            #IO.puts "#{:rand.uniform(10)}"
+            Enum.join(["#Hashtag",  :rand.uniform(10), " ", "@user", :rand.uniform(10)])
+        else
+            Enum.join(["#Hashtag",  :rand.uniform(nUsers), " ", "@user", :rand.uniform(nUsers)])
+        end
+    end 
+    
+    def handle_cast({:clientHelper, i}, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do
+        #IO.puts "Client helper #{i} #{displayInterval}"
+
+        GenServer.cast self(), {:sendRepeatedTweets, i, 0, :rand.uniform(10)}
+        GenServer.cast self(), :disconnect_connect
+
+        # #causing some timeout problem: has to be corrected
+        # Process.send_after(self(), {:sendRepeatedTweets, i}, displayInterval)
+        # #Process.send_after(self(), :search, 50)
+        # Process.send_after(self(), {:disconnect_connect, displayInterval}, 10*displayInterval)
+        GenServer.cast self(), {:clientHelper, i}
+        {:noreply,  [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
+    end
 
     @doc """
     Helper function to send tweets at a regular interval to the Server
@@ -368,16 +379,6 @@ defmodule Client do
     def handle_cast({:updateQ, newTweetQ}, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do
         {:noreply,  [userId, newTweetQ, nUsers, retweetCount, followerMapSize, displayInterval, state]}
     end
-
-    # def handle_info({:disconnect_connect, displayInterval}, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do      
-    #     GenServer.cast self(), :changeState
-    #     if state == 1 do
-    #       # update the tweet queue after waking up
-    #       newTweetQ = GenServer.call :genMain, {:getTweetQ, userId}
-    #       GenServer.cast self(), {:updateQ, newTweetQ}
-    #     end
-    #     {:noreply,  [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]}
-    # end
 
     #to do:has to be changed to handle_info later
     def handle_cast(:disconnect_connect, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state]) do      
