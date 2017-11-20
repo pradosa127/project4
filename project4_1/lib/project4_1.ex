@@ -4,10 +4,10 @@ defmodule Server do
   @doc """
   Server Process is started using start_link
   nUsers - total number of users in the twitter system
-  followersMap - contains the follower's list for every user
+  followersMap - map of user's id and the follower's list for every user
   displayInterval - the interval in which the tweets are tweeted
-  #actorsMap - contains the process id for every user
-  tweetsQueueMap - consists of list of tweets for every user
+  actorsList - contains the process id for every user
+  tweetsQueueMap - map of user's id and tweet queue
   searchMap - consists of #hashtags and @users mapped to the tweets that consists them
   maxTweetCount - total number of tweets that has to be tweeted/retweeted before the program is exited
   """
@@ -16,7 +16,7 @@ defmodule Server do
   end
 
   @doc """
-   Update the actors map with (process id/user id, user number) as the key-value pair
+   Update the actors map with (process id, user number) as the (key, value) pair
   """
   def handle_cast({:updateActors, pid}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
       # IO.puts "updateActors"
@@ -66,16 +66,13 @@ defmodule Server do
   end
 
   
-# TweetQueueMap - map if user's process id and tweet queue
  @doc """
-  Tweet updates the servers TweetQueueMap
+  When a user  tweets :tweet updates the users's and it's followers tweet queue
  """
   def handle_cast({:tweet, tweet, userId, tweetOrPopulate}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
-      # check if _from works
       IO.puts "User#{userId} tweeting #{tweet}"
       
       if Map.has_key?(tweetsQueueMap, userId) do
-        #IO.puts "has key"
         tweetQ = Map.get(tweetsQueueMap, userId)
         #IO.inspect tweetQ
         tweetQ = if :queue.len(tweetQ)> 100 do
@@ -85,7 +82,6 @@ defmodule Server do
             :queue.in(tweet, tweetQ)
         end
       else
-        #IO.puts "no key"
         tweetQ = :queue.new
         tweetQ = :queue.in(tweet, tweetQ)
       end
@@ -96,26 +92,28 @@ defmodule Server do
 
       # update follower's tweet queues
       if tweetOrPopulate == "tweet" do
-        #followersMap = {:getUserFollowers, userId}
-        GenServer.cast :genMain, {:updateFollowersTweetQ, 0, tweet}
+        userFollowersList = Map.get(followersMap, userId)
+        GenServer.cast :genMain, {:updateFollowersTweetQ, userFollowersList, 0, tweet}
       end
 
       #IO.puts "tweetsQueueMap: #{tweetsQueueMap}"
       GenServer.cast :genMain, :incrTotalTweetCnt
        #add to Search Map
-      #IO.puts "   "
-    {:noreply, [nUsers, followersMap, actorsList, displayInterval, new_tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
+      {:noreply, [nUsers, followersMap, actorsList, displayInterval, new_tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
   end
 
-  def handle_cast({:updateFollowersTweetQ, userId, tweet}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
+  @doc """
+  updates the tweet queue of alll the follower's of a user when the user tweets
+  """
+  def handle_cast({:updateFollowersTweetQ, userFollowersList, i, tweet}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
     # IO.inspect followersMap
     # IO.inspect userId
-    userFollowersList = Map.get(followersMap, userId)
-    if userId < length(userFollowersList) do 
-      userId = Enum.at(userFollowersList, userId)
-      userPID = Enum.at(actorsList, userId)
-      GenServer.cast :genMain, {:tweet, tweet, userId, "populate"}
-      GenServer.cast :genMain, {:updateFollowersTweetQ, userId+1, tweet}
+    #userFollowersList = Map.get(followersMap, i)
+    if i < length(userFollowersList) do 
+      i = Enum.at(userFollowersList, i)
+      userPID = Enum.at(actorsList, i)
+      GenServer.cast :genMain, {:tweet, tweet, i, "populate"}
+      GenServer.cast :genMain, {:updateFollowersTweetQ, userFollowersList, i+1, tweet}
     end
     {:noreply, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
   end
@@ -135,6 +133,10 @@ defmodule Server do
     {:reply, Map.get(followersMap, userId), [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt+1, maxTweetCnt, stTime]}
   end 
 
+
+  @doc """
+  For retweeting the tweets
+  """
   def handle_cast({:retweet, tweet, userId}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
     GenServer.cast :genMain, {:tweet, tweet, userId, "tweet"}
     IO.puts "User#{userId} retweeting"
@@ -237,7 +239,7 @@ end
 defmodule Client do
   use GenServer
     @doc """
-    Client Process is started using Start_Link
+    Client Process is started using start_link
     """
     def start_link(userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state) do
       {_, pid} = GenServer.start_link(__MODULE__, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state])
