@@ -134,30 +134,24 @@ defmodule Server do
  @doc """
   For searching tweets with specific hashtags and mentions
  """
-  def handle_call({:searchHashTag, hashTagOrMention}, _from, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
-    #hashTagOrMention = "#HashTag1"
-    if Map.has_key?(searchMap, hashTagOrMention) do
-      tweetSet = Map.get(searchMap, hashTagOrMention)
-    else
-      tweetSet = MapSet.new()
-    end
-    IO.puts "Result of searching for #{hashTagOrMention}"
-    IO.inspect tweetSet
-    {:reply, tweetSet, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
-  end
+  # def handle_call({:searchHashTag, hashTagOrMention}, _from, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
+  #   #hashTagOrMention = "#HashTag1"
+  #   if Map.has_key?(searchMap, hashTagOrMention) do
+  #     tweetSet = Map.get(searchMap, hashTagOrMention)
+  #   else
+  #     tweetSet = MapSet.new()
+  #   end
+  #   IO.puts "Result of searching for #{hashTagOrMention}"
+  #   IO.inspect tweetSet
+  #   {:reply, tweetSet, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
+  # end
     
   
  @doc """
   When a user  tweets :tweet updates the users's and it's followers tweet queue
  """
   def handle_cast({:tweet, tweet, userId, tweetOrPopulate}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
-<<<<<<< HEAD
       # IO.puts "User#{userId} tweeting #{tweet}"
-      
-=======
-      IO.puts "User#{userId} tweeting #{tweet}"
-      #:timer.sleep(100)
->>>>>>> dba23da839863fb4f57a1757b1d365200f981b0f
       if Map.has_key?(tweetsQueueMap, userId) do
         tweetQ = Map.get(tweetsQueueMap, userId)
         #IO.inspect tweetQ
@@ -199,6 +193,19 @@ defmodule Server do
       {:noreply, [nUsers, followersMap, actorsList, displayInterval, new_tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
   end
 
+
+  def handle_cast({:updateFollowersTweetQ, userFollowersList, i, tweet}, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
+    # IO.inspect followersMap
+    # IO.inspect userId
+    #userFollowersList = Map.get(followersMap, i)
+    if i < length(userFollowersList) do 
+      i = Enum.at(userFollowersList, i)
+      userPID = Enum.at(actorsList, i)
+      GenServer.cast :genMain, {:tweet, tweet, i, "populate"}
+      GenServer.cast :genMain, {:updateFollowersTweetQ, userFollowersList, i+1, tweet}
+    end
+    {:noreply, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]}
+  end
 
   #check if this is required
   def handle_call({:getUserFollowers, userId}, _from, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime]) do
@@ -257,7 +264,7 @@ defmodule Main do
         IO.puts "#{inspect userPIDs}"
         Server.zipf(nUsers)
         followersList = GenServer.call :genMain, :getFollowers
-        IO.puts "#{inspect followersList}"
+        # IO.puts "#{inspect followersList}"
         # IO.puts "#{inspect followersList}"  
         # callClientHelper(nUsers, 0, followersList, userPIDs)
         # userPIDs = GenServer.call :genMain, :getActorsList
@@ -414,13 +421,8 @@ defmodule Client do
             GenServer.cast :genMain, {:tweet, tweetMsg, userId, "tweet"}
             ##IO.puts "sendRepeatedTweets #{tweetMsg}"
             #to do : has to be removed after Process.start_after is fixed
-<<<<<<< HEAD
             #:timer.sleep(3)
             GenServer.cast pid, {:sendRepeatedTweets, userId, i+1, n,pid}
-=======
-            :timer.sleep(3)
-            GenServer.cast self(), {:sendRepeatedTweets, userId, i+1, n}
->>>>>>> dba23da839863fb4f57a1757b1d365200f981b0f
             #IO.inspect pid
           end
         end
@@ -469,13 +471,14 @@ defmodule Client do
                state=1
           # IO.puts "User#{userId} woke up"
           newTweetQ = GenServer.call :genMain, {:getTweetQ, userId}
-          IO.puts "#{inspect newTweetQ}"
+          # IO.puts "#{inspect newTweetQ}"
           # GenServer.cast self(), {:updateQ, newTweetQ}
         else
                state=0
           # IO.puts "User#{userId} sleeping"
         end
         #IO.puts "afterstate #{state}"
+
         {:noreply,  [userId, newTweetQ, nUsers, retweetCount, followerMapSize, displayInterval, state]}
     end
     
@@ -484,13 +487,7 @@ defmodule Client do
         #IO.puts "beforestate:: #{state}"
         if state == 0 do 
           state = 1
-<<<<<<< HEAD
           IO.puts "User#{userId} woke up"       
-=======
-          #to do : change the location of search
-          GenServer.call :genMain, {:searchHashTag, "#HashTag1"}
-          IO.puts "User#{userId} woke up"
->>>>>>> dba23da839863fb4f57a1757b1d365200f981b0f
         else
           state = 0
           IO.puts "User#{userId} sleeping"
