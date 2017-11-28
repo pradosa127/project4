@@ -473,8 +473,6 @@ defmodule Client do
         {:noreply,  [userId, newTweetQ, nUsers, retweetCount, followerMapSize, displayInterval, state,serverId]}
     end
 
-
-
     @doc """
     Searches random hashtag or mentions at regular inteval
     """    
