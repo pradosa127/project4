@@ -31,10 +31,30 @@ defmodule Server do
            tweetsPersecond=((totalTweetCnt-reTweetcnt)/time)*1000
            reTweetPersecond=(reTweetcnt/time)*1000
            searchPresecond=(searchCount/time)*1000
-           IO.puts "total tweet handled by server persecond: #{tweetsPersecond}"
-           IO.puts "total retweet handled by server per second: #{reTweetPersecond}"
-           IO.puts "total Searches handled by server per second: #{searchCount}"
-           IO.puts "total live connecteions: #{nUsers-noOfdisConn}"
+           maximumFollower=Map.get(followersMap,0) |>length()
+           totalRegisterdUser=length(actorsList)
+           
+           IO.puts "---------------"
+           IO.puts "User Statisics:"
+           IO.puts "---------------"
+           IO.puts "Total Users            : #{nUsers}"
+           IO.puts "Total registered Users : #{totalRegisterdUser}"
+           IO.puts "Total Online Users     : #{totalRegisterdUser-noOfdisConn}"
+           IO.puts "Maximu subscriber count as per Zipf distibution: #{maximumFollower}"
+           IO.puts " "
+           IO.puts "---------------"
+           IO.puts "Tweet Statisics:"
+           IO.puts "---------------"
+           IO.puts "Total Tweet count   : #{totalTweetCnt}"
+           IO.puts "Tweets persecond    : #{tweetsPersecond}"
+           IO.puts "Total ReTweet count : #{reTweetcnt}"
+           IO.puts "Retweets per second : #{reTweetPersecond}"
+           IO.puts " "
+           IO.puts "---------------"
+           IO.puts "Search Statisics:"
+           IO.puts "---------------"
+           IO.puts "Total Search count                          : #{searchCount}"
+           IO.puts "Searches(Tweets/Hashtag/Mentions) per second: #{searchPresecond}"
            IO.puts "The time taken by #{nUsers} users is #{time} milliseconds"
            IO.puts ""
     {:noreply, [nUsers, followersMap, actorsList, displayInterval, tweetsQueueMap, searchMap, totalTweetCnt, maxTweetCnt, stTime,reTweetcnt,searchCount,noOfdisConn]}
@@ -308,6 +328,9 @@ defmodule Main do
             {nUsers,  _} = Integer.parse(Enum.at(k,1))
             serverId=:global.whereis_name(:gen_main)
             # IO.inspect pid
+            IO.puts "Simulation started..."
+            IO.puts "View simulation statistics on server window..."
+            IO.puts "User creation started.."
             createNodes(nUsers, 0,serverId)
           else
             if Enum.at(k, 0)=="server" and Enum.count(k) == 2 do
@@ -333,6 +356,7 @@ defmodule Main do
               :global.register_name(:gen_main, server_pid)
               IO.inspect server_pid
               Server.zipf(nUsers)
+              # GenServer.cast server_pid,{:zipf,nUsers}
             else
               IO.puts "please provide 'server' or 'client' with nUSers"
               System.halt(0)
@@ -350,6 +374,12 @@ defmodule Main do
         tweetQueue = :queue.new
         nUsers = nUsers
         retweetCount = 0
+        # if Process.alive?serverId do
+        #   followerMapSize = GenServer.call serverId, {:getUserFollowers,userId}
+        # else
+        #   IO.puts "Server not up"
+        #   System.halt(0)
+        # end  
         followerMapSize = GenServer.call serverId, {:getUserFollowers,userId}
         divf =  round(Float.ceil((followerMapSize/nUsers)*100))
         displayInterval=cond do
@@ -358,21 +388,29 @@ defmodule Main do
           divf<=10 ->300
           divf<=20 ->150
           divf<=30 -> 30
-          divf<=40 -> 10
+          divf<=40 -> 5
           divf<=50 -> 3
           true -> 1
         end
-        if(Integer.mod(i,1000)==0)do
-           IO.puts "users created #{i}"
-        end
-       
-        # IO.puts "#{displayInterval}"
+        # if((i/nUsers)==0.25)do
+        #    IO.puts "25 % users created..."
+        # end
+        # if((i/nUsers)==0.5)do
+        #    IO.puts "50 % users created..."
+        # end
+        # if((i/nUsers)==0.75)do
+        #    IO.puts "75 % users created..."
+        # end
+        # if((i/nUsers)==1.0)do
+        #    IO.puts "100 % users created..."
+        # end
         
         state = 1 # 0 - disconnected , 1 - connected
         Client.start_link(userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state,serverId)
         createNodes(nUsers, i+1,serverId)
       else
-       IO.puts "users created"
+       IO.puts "100% users created"
+       IO.puts "simulation in progress..."
       end 
     end
 end
@@ -392,16 +430,21 @@ defmodule Client do
         # di=GenServer.call self, :getDisplayInterval
         # IO.puts "#{di}"
         Process.send_after(self(), :sendRepeatedTweets, di)
-        Process.send_after(self(), :reTweet, di+100)
-        Process.send_after(self(), :searchHashTagOrMentions,di+50)
-        Process.send_after(self(), :changeState,di+100)
+        Process.send_after(self(), :reTweet, di+10)
+        Process.send_after(self(), :searchHashTagOrMentions,di+5)
+        Process.send_after(self(), :changeState,di+10)
     end
     
     
     def start_link(userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state,serverId) do
       {_, pid} = GenServer.start_link(__MODULE__, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state,serverId])
       # GenServer.cast serverId, {:hello} 
-      GenServer.cast serverId, {:updateActors, pid} 
+       GenServer.cast serverId, {:updateActors, pid} 
+      # if Process.alive?(serverId)do
+      #   GenServer.cast serverId, {:updateActors, pid} 
+      # else
+      #   System.halt(0)
+      # end  
     end
     
     def handle_call(:getUserId, _from, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state,serverId]) do
@@ -443,7 +486,7 @@ defmodule Client do
         # IO.puts "sendRepeatedTweets #{userId}"
         if state == 0 do
           # :timer.sleep(1000)
-          Process.sleep(1000)
+          # Process.sleep(10000)
         else 
           schedule(displayInterval)
           # IO.puts "sendRepeatedTweets #{userId}"
@@ -457,7 +500,8 @@ defmodule Client do
         #to do : has to be removed after Process.start_after is fixed
         # IO.puts "sendRepeatedTweets #{userId}"
         if state == 0 do
-          :timer.sleep(100)
+          # :timer.sleep(100)
+          # Process.sleep(1000)          
         else 
             schedule(displayInterval)
             # IO.puts "sendRepeatedTweets #{userId}"
@@ -490,6 +534,7 @@ defmodule Client do
           else
                state=0
                GenServer.cast serverId,{:updateNoofDisconn,0}
+
               #  IO.puts "User#{userId} sleeping"
           end
         #IO.puts "afterstate #{state}"
@@ -501,7 +546,7 @@ defmodule Client do
     """    
     def handle_info(:searchHashTagOrMentions, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state,serverId]) do
       # IO.puts "sendRepeatedTweets #{userId}"
-      schedule(displayInterval) 
+      schedule(displayInterval+10) 
       if state !=0 do
         list=[Enum.join(["#Hashtag",:rand.uniform(10)]),Enum.join(["@user",:rand.uniform(10)])]
         hashTagOrMention =Enum.at(list,:rand.uniform(2)-1)
@@ -516,16 +561,13 @@ defmodule Client do
     receiveTweet receives tweets and saves it to it's own tweet queue 
     """
     def handle_cast({:receiveTweet,tweetMsg}, [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state,serverId]) do
-        if state == 1 do
+        if state != 0 do
           #The maximum number of tweets that can be in the tweet queue is 100
           tweetQueue=if :queue.len(tweetQueue)> 100 do
               :queue.in(tweetMsg, :queue.drop(tweetQueue))
           else
               :queue.in(tweetMsg, tweetQueue)
           end
-      
-        else
-          IO.puts "can't update while sleeping"
         end
         # IO.puts "#{inspect tweetQueue}"
         {:noreply,  [userId, tweetQueue, nUsers, retweetCount, followerMapSize, displayInterval, state,serverId]}
